@@ -10,6 +10,7 @@ import CommonCrypto
 //   • Realtime feed polling (foreground only, ~60s)
 //   • Derived state: [Vehicle], selected Stop, Arrivals
 
+@MainActor
 @Observable
 final class AppModel {
 
@@ -22,7 +23,7 @@ final class AppModel {
     var trackedVehicle: Vehicle?        // highlighted + followed when user taps an Arrival
 
     /// Current map region; persisted to UserDefaults as last-viewed region.
-    var mapRegion: MKCoordinateRegion = Self.defaultRegion
+    var mapRegion: MKCoordinateRegion = AppModel.defaultRegion
 
     var isLoadingStatic = false
     var staticError: String?
@@ -260,7 +261,7 @@ enum StaticDataManager {
         // Uses CommonCrypto via Security framework — no extra dependency needed.
         let data = try Data(contentsOf: url)
         var digest = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
-        data.withUnsafeBytes { CC_SHA256($0.baseAddress, CC_LONG(data.count), &digest) }
+        _ = data.withUnsafeBytes { CC_SHA256($0.baseAddress, CC_LONG(data.count), &digest) }
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 

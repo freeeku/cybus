@@ -17,6 +17,7 @@ gtfs.sqlite
 # macOS / Xcode
 .DS_Store
 ios/build/
+ios/.build/
 ios/Cybus.xcodeproj/
 DerivedData/
 xcuserdata/
