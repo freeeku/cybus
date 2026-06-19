@@ -32,6 +32,17 @@ struct Stop: Identifiable {
     let coordinate: CLLocationCoordinate2D
 }
 
+// MARK: - CoordinateBounds
+
+/// A lat/lon bounding box. Lets the data layer answer "which Stops are in view?"
+/// without coupling to MapKit — the map converts its region into these bounds.
+struct CoordinateBounds {
+    let minLat: Double
+    let maxLat: Double
+    let minLon: Double
+    let maxLon: Double
+}
+
 // MARK: - RouteInfo
 
 /// Static metadata for a named bus line, including the polyline used when selected.

@@ -11,6 +11,7 @@ private final class MockGTFSStore: GTFSStoreProtocol {
     var tripRoutes: [String: String] = [:]
     var tripHeadsigns: [String: String] = [:]
     var upcomingTripsByStop: [String: [ScheduledTrip]] = [:]
+    var allStops: [Stop] = []
 
     func route(id: String) -> RouteInfo? { routes[id] }
     func routeId(forTrip tripId: String) -> String? { tripRoutes[tripId] }
@@ -18,6 +19,12 @@ private final class MockGTFSStore: GTFSStoreProtocol {
     func shape(forRoute routeId: String) -> [CLLocationCoordinate2D] { [] }
     func upcomingTrips(stopId: String, after: Date) -> [ScheduledTrip] {
         upcomingTripsByStop[stopId] ?? []
+    }
+    func stops(in bounds: CoordinateBounds, limit: Int) -> [Stop] {
+        Array(allStops.filter {
+            $0.coordinate.latitude >= bounds.minLat && $0.coordinate.latitude <= bounds.maxLat &&
+            $0.coordinate.longitude >= bounds.minLon && $0.coordinate.longitude <= bounds.maxLon
+        }.prefix(limit))
     }
 }
 

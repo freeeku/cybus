@@ -16,6 +16,7 @@ final class AppModel {
     // MARK: - Public state (read by views)
 
     var vehicles: [Vehicle] = []
+    var stops: [Stop] = []              // Stops visible at the current zoom (empty when zoomed out)
     var selectedStop: Stop?
     var arrivals: [Arrival] = []
     var trackedVehicle: Vehicle?        // highlighted + followed when user taps an Arrival
@@ -82,6 +83,33 @@ final class AppModel {
         trackedVehicle = ArrivalBuilder.resolveVehicle(in: vehicles, for: arrival)
     }
 
+    // MARK: - Stops on the map
+
+    /// Span (in degrees latitude) below which individual Stops are shown. Above
+    /// this the map would be an unreadable wall of pins (PRD story 7), so we
+    /// show none.
+    private static let stopZoomThreshold: Double = 0.08
+
+    /// Maximum Stops loaded for a single view, as a backstop against a dense
+    /// bounding box. The zoom gate keeps real-world counts well under this.
+    private static let stopQueryLimit = 400
+
+    /// Recomputes the visible Stops for the given map region. Clears them when
+    /// zoomed out past the threshold or before the static store has loaded.
+    func updateVisibleStops(for region: MKCoordinateRegion) {
+        guard let store, region.span.latitudeDelta < Self.stopZoomThreshold else {
+            if !stops.isEmpty { stops = [] }
+            return
+        }
+        let bounds = CoordinateBounds(
+            minLat: region.center.latitude - region.span.latitudeDelta / 2,
+            maxLat: region.center.latitude + region.span.latitudeDelta / 2,
+            minLon: region.center.longitude - region.span.longitudeDelta / 2,
+            maxLon: region.center.longitude + region.span.longitudeDelta / 2
+        )
+        stops = store.stops(in: bounds, limit: Self.stopQueryLimit)
+    }
+
     // MARK: - Map region persistence
 
     func saveRegion(_ region: MKCoordinateRegion) {
@@ -114,6 +142,9 @@ final class AppModel {
                 sqliteURL: Self.sqliteURL
             )
             store = try GTFSStore(url: localURL)
+            // The map may already be zoomed into a city (restored region), so
+            // populate Stops now rather than waiting for the next camera move.
+            updateVisibleStops(for: mapRegion)
         } catch {
             staticError = error.localizedDescription
         }

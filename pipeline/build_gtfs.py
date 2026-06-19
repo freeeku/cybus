@@ -124,6 +124,7 @@ CREATE TABLE IF NOT EXISTS shapes (
 CREATE INDEX IF NOT EXISTS idx_stop_times_stop ON stop_times(stop_id);
 CREATE INDEX IF NOT EXISTS idx_trips_route     ON trips(route_id);
 CREATE INDEX IF NOT EXISTS idx_shapes_id       ON shapes(shape_id);
+CREATE INDEX IF NOT EXISTS idx_stops_latlon    ON stops(stop_lat, stop_lon);
 """
 
 # ---------------------------------------------------------------------------

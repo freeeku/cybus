@@ -20,6 +20,8 @@ protocol GTFSStoreProtocol {
     func shape(forRoute routeId: String) -> [CLLocationCoordinate2D]
     /// Trips serving stopId with a scheduled arrival after `after`, within the next 3 hours.
     func upcomingTrips(stopId: String, after: Date) -> [ScheduledTrip]
+    /// Stops whose coordinate falls within `bounds`, capped at `limit` (no order guarantee).
+    func stops(in bounds: CoordinateBounds, limit: Int) -> [Stop]
 }
 
 // MARK: - Live SQLite implementation
@@ -208,6 +210,41 @@ final class GTFSStore: GTFSStoreProtocol {
         }
         activeServiceCache[dateInt] = active
         return active
+    }
+
+    func stops(in bounds: CoordinateBounds, limit: Int) -> [Stop] {
+        let sql = """
+            SELECT stop_id, stop_name, stop_lat, stop_lon
+            FROM stops
+            WHERE stop_lat BETWEEN ? AND ?
+              AND stop_lon BETWEEN ? AND ?
+            LIMIT ?
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_double(stmt, 1, bounds.minLat)
+        sqlite3_bind_double(stmt, 2, bounds.maxLat)
+        sqlite3_bind_double(stmt, 3, bounds.minLon)
+        sqlite3_bind_double(stmt, 4, bounds.maxLon)
+        sqlite3_bind_int(stmt, 5, Int32(limit))
+
+        var results: [Stop] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let idC = sqlite3_column_text(stmt, 0),
+                  let nameC = sqlite3_column_text(stmt, 1) else { continue }
+            let coord = CLLocationCoordinate2D(
+                latitude: sqlite3_column_double(stmt, 2),
+                longitude: sqlite3_column_double(stmt, 3)
+            )
+            guard coord.isValid else { continue }
+            results.append(Stop(
+                id: String(cString: idC),
+                name: String(cString: nameC),
+                coordinate: coord
+            ))
+        }
+        return results
     }
 
     // MARK: - Private helpers

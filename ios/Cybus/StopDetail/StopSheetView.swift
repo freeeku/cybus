@@ -38,7 +38,6 @@ struct StopSheetView: View {
                 }
             }
         }
-        .onAppear { appModel.selectStop(stop) }
         .onReceive(refreshTimer) { _ in
             // Re-compute arrivals against a fresh `now`, but preserve the
             // user's tracked vehicle (selectStop would clear it).
