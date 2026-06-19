@@ -38,11 +38,13 @@ How transit data flows from CyNAP to the app. There are two independent pieces o
 **Steps each run:**
 1. Download the 7 per-provider zips (EMEL, OSYPA, OSEA, NPT, LPT, Intercity, Pame Express).
 2. **Validate** each with the MobilityData GTFS validator. If a feed is broken or hostile, fail the build and keep serving the last-good version.
-3. Merge the 7 feeds into one compact **SQLite** (only the tables/columns the app needs: stops, routes, trips, shapes).
+3. Merge the 7 feeds into one compact **SQLite** (only the tables/columns the app needs: stops, routes, trips, stop_times, shapes, plus **calendar** + **calendar_dates** and a `service_id` on trips so the app can filter scheduled arrivals to the days a trip actually runs). IDs are namespaced per-provider (`PROVIDER:id`) to avoid cross-provider collisions.
 4. Compute a **SHA-256** (and optionally sign) so the app can verify integrity.
 5. Publish the SQLite + a version/manifest to free static hosting.
 
 **Download note:** the motionbuscard zip endpoint requires the `&rel=True` query param (verified working — see [data-sources.md](./data-sources.md)).
+
+**Schema coupling:** the SQLite schema lives in `pipeline/build_gtfs.py` and is read by the app's `GTFSStore`. The two must stay in lockstep — after any schema change the pipeline must be re-run to regenerate `gtfs.sqlite` before the app sees the new shape. The app's `GTFSStore` degrades gracefully if `calendar`/`calendar_dates` are absent (no day-of-service filtering) rather than failing.
 
 ## Piece 2 — Realtime edge proxy (continuous)
 
