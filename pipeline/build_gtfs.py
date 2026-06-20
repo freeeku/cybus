@@ -348,8 +348,10 @@ def main() -> None:
     ap.add_argument("--version", default=None, help="Version string (default: today's date)")
     ap.add_argument(
         "--public-url",
-        default="https://YOUR_STATIC_HOST/cybus/gtfs.sqlite",
-        help="Public URL the app will download the SQLite from"
+        default="https://YOUR_GITHUB_USER.github.io/cybus/gtfs.sqlite",
+        help="Public URL the app will download the SQLite from (written into "
+             "manifest.json). In CI this comes from the STATIC_SQLITE_URL repo "
+             "variable. For GitHub Pages: https://<user>.github.io/<repo>/gtfs.sqlite"
     )
     ap.add_argument(
         "--fail-fast", action="store_true",

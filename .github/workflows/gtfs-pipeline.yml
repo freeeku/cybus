@@ -39,32 +39,18 @@ jobs:
           echo "Manifest:"
           cat dist/manifest.json
 
-      # ── Option A: Publish to GitHub Pages ──────────────────────────────────
-      # Uncomment this block and configure the repository for GitHub Pages
-      # (Settings → Pages → Source: GitHub Actions).
-      #
-      # - name: Deploy to GitHub Pages
-      #   uses: peaceiris/actions-gh-pages@v4
-      #   with:
-      #     github_token: ${{ secrets.GITHUB_TOKEN }}
-      #     publish_dir: dist/
-      #     destination_dir: cybus/
-      #     keep_files: false
-
-      # ── Option B: Upload to Cloudflare R2 ─────────────────────────────────
-      # Set CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_R2_BUCKET, and R2_ACCESS_KEY_ID /
-      # R2_SECRET_ACCESS_KEY in repository secrets. Install wrangler.
-      #
-      # - name: Upload to Cloudflare R2
-      #   env:
-      #     CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      #   run: |
-      #     npx wrangler r2 object put "${{ secrets.CLOUDFLARE_R2_BUCKET }}/cybus/gtfs.sqlite" \
-      #       --file dist/gtfs.sqlite --content-type application/octet-stream
-      #     npx wrangler r2 object put "${{ secrets.CLOUDFLARE_R2_BUCKET }}/cybus/manifest.json" \
-      #       --file dist/manifest.json --content-type application/json
+      # ── Publish to GitHub Pages ────────────────────────────────────────────
+      # Publishes dist/ to the gh-pages branch root, so the files are served at:
+      #   https://<user>.github.io/<repo>/gtfs.sqlite
+      #   https://<user>.github.io/<repo>/manifest.json
+      # One-time setup: Settings → Pages → Source: "Deploy from a branch",
+      # Branch: gh-pages / root. See docs/deploy.md.
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: dist/
+          keep_files: false
 
       - name: Upload dist/ as artifact (for inspection)
         uses: actions/upload-artifact@v4

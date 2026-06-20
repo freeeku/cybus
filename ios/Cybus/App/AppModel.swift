@@ -41,9 +41,10 @@ final class AppModel {
     private var pollTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
 
-    private static let proxyURL = URL(string: "https://cybus-proxy.YOUR_SUBDOMAIN.workers.dev/gtfs-rt")!
-    private static let manifestURL = URL(string: "https://YOUR_STATIC_HOST/cybus/manifest.json")!
-    private static let sqliteURL = URL(string: "https://YOUR_STATIC_HOST/cybus/gtfs.sqlite")!
+    // Endpoints live in AppConfig — the single place to edit after deploying.
+    private static let proxyURL = AppConfig.realtimeFeedURL
+    private static let manifestURL = AppConfig.manifestURL
+    private static let sqliteURL = AppConfig.sqliteURL
 
     // MARK: - Init
 
