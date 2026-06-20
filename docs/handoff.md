@@ -1,19 +1,15 @@
 # Handoff — current status & how to resume (incl. on another Mac)
 
 Snapshot for picking the project back up, e.g. on a different machine.
-Last updated: 2026-06-20.
+Last updated: 2026-06-20 (repo pushed to GitHub).
 
 ## Where things are
 
-All work is committed on branch `master`. A GitHub remote exists but **nothing
-is pushed yet** — this checkout is still the only copy of the actual code.
+All work is committed on branch `master` and **pushed to GitHub** — `master`
+tracks `origin/master`, so this checkout is no longer the only copy.
 - Remote: `origin` → https://github.com/freeeku/cybus (**private**, created 2026-06-20).
-- Push is **blocked**: the `gh` token has `repo`+`read:org` but not `workflow`
-  scope, so it can't upload `.github/workflows/gtfs-pipeline.yml`. Unblock with:
-  ```sh
-  gh auth refresh -s workflow -h github.com   # interactive (browser device code)
-  git push -u origin master
-  ```
+- The earlier push block (missing `workflow` scope on the `gh` token) is resolved:
+  ran `gh auth refresh -s workflow -h github.com`, then `git push -u origin master`.
 
 Done and verified (`xcodebuild test` on iPhone 17 / iOS 26.5 → 23 tests pass):
 - iOS app builds; domain layer, map, stop sheet all in place.
@@ -68,12 +64,7 @@ Not done yet:
 
 Full commands in [deploy.md](./deploy.md). Summary of what only you can do:
 
-1. **Push to GitHub** — remote already added; grant `workflow` scope then push:
-   ```sh
-   gh auth refresh -s workflow -h github.com
-   git push -u origin master
-   ```
-   (`gh` auth itself works as account `freeeku`; only the `workflow` scope is missing.)
+1. **Push to GitHub** — ✅ done (2026-06-20). `master` tracks `origin/master`.
 2. **Pick the static host** — ⚠️ the repo is **private**, and **GitHub Pages is not
    free on private repos**. So either: make the repo public, use a paid plan, or
    host the static files elsewhere (R2 / B2 / Netlify — only `AppConfig.staticBaseURL`
