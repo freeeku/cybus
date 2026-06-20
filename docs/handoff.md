@@ -5,8 +5,15 @@ Last updated: 2026-06-20.
 
 ## Where things are
 
-All work is committed on branch `master`. **No git remote yet — this checkout
-is the only copy until you push it.**
+All work is committed on branch `master`. A GitHub remote exists but **nothing
+is pushed yet** — this checkout is still the only copy of the actual code.
+- Remote: `origin` → https://github.com/freeeku/cybus (**private**, created 2026-06-20).
+- Push is **blocked**: the `gh` token has `repo`+`read:org` but not `workflow`
+  scope, so it can't upload `.github/workflows/gtfs-pipeline.yml`. Unblock with:
+  ```sh
+  gh auth refresh -s workflow -h github.com   # interactive (browser device code)
+  git push -u origin master
+  ```
 
 Done and verified (`xcodebuild test` on iPhone 17 / iOS 26.5 → 23 tests pass):
 - iOS app builds; domain layer, map, stop sheet all in place.
@@ -61,14 +68,22 @@ Not done yet:
 
 Full commands in [deploy.md](./deploy.md). Summary of what only you can do:
 
-1. **Push to GitHub** (`git remote add origin …` then `git push -u origin master`).
-   Note: `gh` CLI auth was failing locally (`freeeku` keyring) — fix or use the browser.
-2. **GitHub Pages:** Settings → Pages → `gh-pages`/root; add Actions **variable**
-   `STATIC_SQLITE_URL = https://<user>.github.io/<repo>/gtfs.sqlite`; run the
-   "Build & Publish Static GTFS" workflow once.
-3. **Cloudflare Worker:** `cd proxy && npm install && npx wrangler login && npx wrangler deploy`
+1. **Push to GitHub** — remote already added; grant `workflow` scope then push:
+   ```sh
+   gh auth refresh -s workflow -h github.com
+   git push -u origin master
+   ```
+   (`gh` auth itself works as account `freeeku`; only the `workflow` scope is missing.)
+2. **Pick the static host** — ⚠️ the repo is **private**, and **GitHub Pages is not
+   free on private repos**. So either: make the repo public, use a paid plan, or
+   host the static files elsewhere (R2 / B2 / Netlify — only `AppConfig.staticBaseURL`
+   + the CI publish step change). Decide this before step 3.
+3. **GitHub Pages** (if going public/paid): Settings → Pages → `gh-pages`/root; add
+   Actions **variable** `STATIC_SQLITE_URL = https://<user>.github.io/<repo>/gtfs.sqlite`;
+   run the "Build & Publish Static GTFS" workflow once.
+4. **Cloudflare Worker:** `cd proxy && npm install && npx wrangler login && npx wrangler deploy`
    (needs a Cloudflare account + Node).
-4. **Fill `ios/Cybus/App/AppConfig.swift`** with the Worker origin + Pages base, rebuild.
+5. **Fill `ios/Cybus/App/AppConfig.swift`** with the Worker origin + static base, rebuild.
 
 Optional anytime: run the pipeline locally to produce/inspect a real artifact —
 `cd pipeline && ./.venv/bin/python build_gtfs.py --out-dir dist/`.
