@@ -1,13 +1,13 @@
 # Handoff — current status & how to resume (incl. on another Mac)
 
 Snapshot for picking the project back up, e.g. on a different machine.
-Last updated: 2026-06-20 (repo pushed to GitHub).
+Last updated: 2026-06-21 (tests added; repo confirmed public).
 
 ## Where things are
 
 All work is committed on branch `master` and **pushed to GitHub** — `master`
 tracks `origin/master`, so this checkout is no longer the only copy.
-- Remote: `origin` → https://github.com/freeeku/cybus (**private**, created 2026-06-20).
+- Remote: `origin` → https://github.com/freeeku/cybus (**public**, created 2026-06-20).
 - The earlier push block (missing `workflow` scope on the `gh` token) is resolved:
   ran `gh auth refresh -s workflow -h github.com`, then `git push -u origin master`.
 
@@ -22,7 +22,7 @@ Done and verified (`xcodebuild test` on iPhone 17 / iOS 26.5 → 23 tests pass):
 Not done yet:
 - Backend not deployed; `AppConfig.swift` still has placeholder URLs.
 - Pipeline never run for real (no `gtfs.sqlite` published).
-- No pipeline/proxy unit tests (PRD asks for them).
+- Pipeline and proxy unit tests added (27 + 16 = 43 tests, all passing).
 
 ## Set up on a new Mac
 
@@ -65,12 +65,8 @@ Not done yet:
 Full commands in [deploy.md](./deploy.md). Summary of what only you can do:
 
 1. **Push to GitHub** — ✅ done (2026-06-20). `master` tracks `origin/master`.
-2. **Pick the static host** — ⚠️ the repo is **private**, and **GitHub Pages is not
-   free on private repos**. So either: make the repo public, use a paid plan, or
-   host the static files elsewhere (R2 / B2 / Netlify — only `AppConfig.staticBaseURL`
-   + the CI publish step change). Decide this before step 3.
-3. **GitHub Pages** (if going public/paid): Settings → Pages → `gh-pages`/root; add
-   Actions **variable** `STATIC_SQLITE_URL = https://<user>.github.io/<repo>/gtfs.sqlite`;
+2. **GitHub Pages:** Settings → Pages → `gh-pages`/root; add
+   Actions **variable** `STATIC_SQLITE_URL = https://freeeku.github.io/cybus/gtfs.sqlite.zz`;
    run the "Build & Publish Static GTFS" workflow once.
 4. **Cloudflare Worker:** `cd proxy && npm install && npx wrangler login && npx wrangler deploy`
    (needs a Cloudflare account + Node).
