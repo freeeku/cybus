@@ -16,11 +16,11 @@ import Foundation
 enum AppConfig {
 
     /// Realtime proxy origin — no trailing slash, no path.
-    static let proxyBaseURL = URL(string: "https://cybus-proxy.YOUR_SUBDOMAIN.workers.dev")!
+    static let proxyBaseURL = URL(string: "https://cybus-proxy.droid4dani.workers.dev")!
 
     /// Static artifact base — no trailing slash. The pipeline publishes
-    /// `manifest.json` and `gtfs.sqlite` directly under this URL.
-    static let staticBaseURL = URL(string: "https://YOUR_GITHUB_USER.github.io/cybus")!
+    /// `manifest.json` and `gtfs.sqlite.zz` directly under this URL.
+    static let staticBaseURL = URL(string: "https://freeeku.github.io/cybus")!
 
     // MARK: - Derived endpoints
 
