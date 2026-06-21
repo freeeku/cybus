@@ -25,36 +25,60 @@ const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
 const CACHE_KEY = "https://cybus-internal/gtfs-rt-snapshot";
 
 // ---------------------------------------------------------------------------
+// Testable deps interface
+// ---------------------------------------------------------------------------
+
+/** Minimal cache surface used by this worker — avoids coupling to workers-types Cache. */
+export interface CacheLike {
+  match(request: RequestInfo | URL): Promise<Response | undefined>;
+  put(request: RequestInfo | URL, response: Response): Promise<void>;
+}
+
+export interface WorkerDeps {
+  fetchFn: typeof fetch;
+  cache: CacheLike;
+}
+
+// ---------------------------------------------------------------------------
 // Worker entry point
 // ---------------------------------------------------------------------------
 
 export default {
   async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-
-    if (url.pathname === "/health") {
-      return healthResponse();
-    }
-
-    if (url.pathname === "/gtfs-rt") {
-      return handleGtfsRt(request);
-    }
-
-    return new Response("Not Found", { status: 404 });
+    return handleRequest(request, { fetchFn: fetch, cache: caches.default });
   },
 } satisfies ExportedHandler;
+
+export async function handleRequest(
+  request: Request,
+  deps: WorkerDeps,
+): Promise<Response> {
+  const url = new URL(request.url);
+
+  if (url.pathname === "/health") {
+    return healthResponse();
+  }
+
+  if (url.pathname === "/gtfs-rt") {
+    return handleGtfsRt(request, deps);
+  }
+
+  return new Response("Not Found", { status: 404 });
+}
 
 // ---------------------------------------------------------------------------
 // /gtfs-rt handler
 // ---------------------------------------------------------------------------
 
-async function handleGtfsRt(request: Request): Promise<Response> {
+async function handleGtfsRt(
+  request: Request,
+  { fetchFn, cache }: WorkerDeps,
+): Promise<Response> {
   // Only allow GET
   if (request.method !== "GET") {
     return new Response("Method Not Allowed", { status: 405 });
   }
 
-  const cache = caches.default;
   const cacheRequest = new Request(CACHE_KEY);
 
   // 1. Try edge cache
@@ -66,7 +90,7 @@ async function handleGtfsRt(request: Request): Promise<Response> {
   // 2. Fetch from upstream
   let upstreamResponse: Response;
   try {
-    upstreamResponse = await fetch(UPSTREAM, {
+    upstreamResponse = await fetchFn(UPSTREAM, {
       signal: AbortSignal.timeout(10_000), // 10-second upstream timeout
     });
   } catch (err) {
