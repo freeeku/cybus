@@ -7,41 +7,37 @@ Cybus has two backend pieces to deploy (both free-tier — see [ADR-0001](./adr/
 
 After both are live, fill in two values in [`ios/Cybus/App/AppConfig.swift`](../ios/Cybus/App/AppConfig.swift) and ship the app.
 
-> Prerequisite: the repo must be pushed to GitHub (Actions + Pages need it).
-> ```sh
-> git remote add origin git@github.com:<you>/cybus.git
-> git push -u origin master
-> ```
+> **Prerequisites already done:** repo is pushed to GitHub (`origin` = `git@github.com:freeeku/cybus.git`, public). `AppConfig.staticBaseURL` is already set to `https://freeeku.github.io/cybus`.
 
 ---
 
 ## 1. Static GTFS on GitHub Pages
 
 The pipeline (`pipeline/build_gtfs.py`) merges the 7 provider feeds into one
-`gtfs.sqlite`, writes `manifest.json` (version + SHA-256), and the GitHub Action
-(`.github/workflows/gtfs-pipeline.yml`) publishes `dist/` to the `gh-pages`
-branch root.
+`gtfs.sqlite.zz` (zlib-compressed), writes `manifest.json` (version + SHA-256),
+and the GitHub Action (`.github/workflows/gtfs-pipeline.yml`) publishes `dist/`
+to the `gh-pages` branch root.
 
 **One-time setup**
 1. **Settings → Pages → Source:** "Deploy from a branch", Branch: `gh-pages` / `root`.
    (The first workflow run creates the `gh-pages` branch.)
 2. **Settings → Secrets and variables → Actions → Variables:** add
-   `STATIC_SQLITE_URL` = `https://<user>.github.io/<repo>/gtfs.sqlite.zz`.
+   `STATIC_SQLITE_URL` = `https://freeeku.github.io/cybus/gtfs.sqlite.zz`.
 3. Run the workflow once manually: **Actions → "Build & Publish Static GTFS" → Run workflow**
    (it otherwise runs daily at 03:00 UTC).
 
 **Verify**
 ```sh
-curl -fsSL https://<user>.github.io/<repo>/manifest.json
-curl -fsSI https://<user>.github.io/<repo>/gtfs.sqlite.zz   # expect 200, HTTPS
+curl -fsSL https://freeeku.github.io/cybus/manifest.json
+curl -fsSI https://freeeku.github.io/cybus/gtfs.sqlite.zz   # expect 200, HTTPS
 ```
 
 **Run the pipeline locally** (optional, to produce/inspect the artifact without CI):
 ```sh
 cd pipeline
-python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
-./.venv/bin/python build_gtfs.py --out-dir dist/
-#  → dist/gtfs.sqlite + dist/manifest.json
+uv venv && uv pip install -r requirements.txt
+.venv/bin/python build_gtfs.py --out-dir dist/
+#  → dist/gtfs.sqlite.zz + dist/manifest.json
 ```
 
 ---
@@ -59,24 +55,26 @@ npm install
 npx wrangler login            # interactive browser OAuth
 npx wrangler deploy           # prints the deployed URL
 # sanity check:
-curl -fsSL https://cybus-proxy.<your-subdomain>.workers.dev/health
+curl -fsSL https://cybus-proxy.droid4dani.workers.dev/health
 ```
 
-The default `*.workers.dev` URL is fine. To use a custom domain, set the
-`routes` block in `proxy/wrangler.toml`.
+`AppConfig.proxyBaseURL` is already set to `https://cybus-proxy.droid4dani.workers.dev`.
+If `wrangler deploy` prints a different subdomain, update that constant and rebuild.
 
 ---
 
 ## 3. Point the app at production
 
-Edit [`ios/Cybus/App/AppConfig.swift`](../ios/Cybus/App/AppConfig.swift):
+[`ios/Cybus/App/AppConfig.swift`](../ios/Cybus/App/AppConfig.swift) already has
+both URLs set:
 
 ```swift
-static let proxyBaseURL  = URL(string: "https://cybus-proxy.<your-subdomain>.workers.dev")!
-static let staticBaseURL = URL(string: "https://<user>.github.io/<repo>")!
+static let proxyBaseURL  = URL(string: "https://cybus-proxy.droid4dani.workers.dev")!
+static let staticBaseURL = URL(string: "https://freeeku.github.io/cybus")!
 ```
 
-Both must be HTTPS. Rebuild and run (see [ios-build.md](./ios-build.md)).
+If the Worker lands on a different subdomain after `wrangler deploy`, update
+`proxyBaseURL`. Then rebuild and run (see [ios-build.md](./ios-build.md)).
 
 ---
 
@@ -84,7 +82,6 @@ Both must be HTTPS. Rebuild and run (see [ios-build.md](./ios-build.md)).
 
 | Step | Needs |
 |------|-------|
-| Push repo, run Actions, enable Pages | GitHub account + repo |
-| `STATIC_SQLITE_URL` variable | GitHub repo settings |
-| Deploy Worker | Cloudflare account, Node, `wrangler login` |
-| Fill `AppConfig.swift` | the two URLs from the steps above |
+| Enable Pages, run Actions, set `STATIC_SQLITE_URL` variable | GitHub repo settings |
+| Deploy Worker (`wrangler login` + `wrangler deploy`) | Cloudflare account, Node |
+| Update `AppConfig.proxyBaseURL` if subdomain differs | two-line edit + rebuild |
