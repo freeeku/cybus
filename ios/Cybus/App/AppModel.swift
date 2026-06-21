@@ -223,7 +223,8 @@ enum StaticDataManager {
 
     private struct Manifest: Decodable {
         let version: String
-        let sha256: String
+        let sha256: String          // SHA-256 of the *uncompressed* SQLite
+        let compression: String?    // "zlib" when the download is zlib-compressed
         let url: String
     }
 
@@ -237,9 +238,11 @@ enum StaticDataManager {
             return localDB
         }
 
-        // Download + verify
+        // Download compressed blob, then decompress + verify
         let (tempURL, _) = try await URLSession.shared.download(from: sqliteURL)
-        let hash = try sha256(of: tempURL)
+        let rawData = try Data(contentsOf: tempURL)
+        let sqliteData = try decompress(rawData, compression: manifest.compression)
+        let hash = sha256(of: sqliteData)
 
         guard hash.lowercased() == manifest.sha256.lowercased() else {
             throw StaticDataError.hashMismatch(expected: manifest.sha256, got: hash)
@@ -247,10 +250,18 @@ enum StaticDataManager {
 
         // Atomically replace
         _ = try? FileManager.default.removeItem(at: localDB)
-        try FileManager.default.moveItem(at: tempURL, to: localDB)
+        try sqliteData.write(to: localDB, options: .atomic)
         storeVersion(manifest.version)
 
         return localDB
+    }
+
+    private static func decompress(_ data: Data, compression: String?) throws -> Data {
+        guard compression == "zlib" else { return data }
+        guard let decompressed = (data as NSData).decompressed(using: .zlib) as Data? else {
+            throw StaticDataError.decompressionFailed
+        }
+        return decompressed
     }
 
     private static func fetchManifest(from url: URL) async throws -> Manifest {
@@ -258,9 +269,7 @@ enum StaticDataManager {
         return try JSONDecoder().decode(Manifest.self, from: data)
     }
 
-    private static func sha256(of url: URL) throws -> String {
-        // Uses CommonCrypto via Security framework — no extra dependency needed.
-        let data = try Data(contentsOf: url)
+    private static func sha256(of data: Data) -> String {
         var digest = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
         _ = data.withUnsafeBytes { CC_SHA256($0.baseAddress, CC_LONG(data.count), &digest) }
         return digest.map { String(format: "%02x", $0) }.joined()
@@ -282,10 +291,13 @@ enum StaticDataManager {
 
 enum StaticDataError: Error, LocalizedError {
     case hashMismatch(expected: String, got: String)
+    case decompressionFailed
     var errorDescription: String? {
-        if case .hashMismatch(let e, let g) = self {
+        switch self {
+        case .hashMismatch(let e, let g):
             return "SQLite hash mismatch — expected \(e), got \(g). Download discarded."
+        case .decompressionFailed:
+            return "Failed to decompress GTFS SQLite (zlib). Download discarded."
         }
-        return nil
     }
 }

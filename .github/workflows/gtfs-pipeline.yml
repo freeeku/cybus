@@ -33,15 +33,15 @@ jobs:
 
       - name: Verify output files exist
         run: |
-          test -f dist/gtfs.sqlite || (echo "ERROR: gtfs.sqlite not found" && exit 1)
+          test -f dist/gtfs.sqlite.zz || (echo "ERROR: gtfs.sqlite.zz not found" && exit 1)
           test -f dist/manifest.json || (echo "ERROR: manifest.json not found" && exit 1)
-          echo "SQLite size: $(du -sh dist/gtfs.sqlite | cut -f1)"
+          echo "Compressed SQLite size: $(du -sh dist/gtfs.sqlite.zz | cut -f1)"
           echo "Manifest:"
           cat dist/manifest.json
 
       # ── Publish to GitHub Pages ────────────────────────────────────────────
       # Publishes dist/ to the gh-pages branch root, so the files are served at:
-      #   https://<user>.github.io/<repo>/gtfs.sqlite
+      #   https://<user>.github.io/<repo>/gtfs.sqlite.zz
       #   https://<user>.github.io/<repo>/manifest.json
       # One-time setup: Settings → Pages → Source: "Deploy from a branch",
       # Branch: gh-pages / root. See docs/deploy.md.

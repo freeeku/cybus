@@ -30,6 +30,6 @@ enum AppConfig {
     /// Version manifest the app checks before downloading the SQLite.
     static var manifestURL: URL { staticBaseURL.appendingPathComponent("manifest.json") }
 
-    /// The compact static GTFS SQLite the app downloads and caches.
-    static var sqliteURL: URL { staticBaseURL.appendingPathComponent("gtfs.sqlite") }
+    /// The zlib-compressed GTFS SQLite the app downloads, decompresses, and caches.
+    static var sqliteURL: URL { staticBaseURL.appendingPathComponent("gtfs.sqlite.zz") }
 }

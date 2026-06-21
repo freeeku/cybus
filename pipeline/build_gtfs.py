@@ -23,6 +23,7 @@ import os
 import sqlite3
 import struct
 import zipfile
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
@@ -326,11 +327,26 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def write_manifest(sqlite_path: Path, manifest_path: Path, version: str, public_url: str) -> None:
+def compress_sqlite(sqlite_path: Path, compressed_path: Path) -> None:
+    """Zlib-compress the SQLite so it fits within GitHub's 100 MB file limit."""
+    data = sqlite_path.read_bytes()
+    compressed = zlib.compress(data, level=9)
+    compressed_path.write_bytes(compressed)
+    ratio = len(compressed) / len(data) * 100
+    log.info(
+        f"Compressed: {compressed_path} "
+        f"({len(compressed)/1024/1024:.1f} MB, {ratio:.0f}% of original)"
+    )
+
+
+def write_manifest(
+    sqlite_path: Path, manifest_path: Path, version: str, public_url: str
+) -> None:
     digest = sha256_file(sqlite_path)
     manifest = {
         "version": version,
-        "sha256": digest,
+        "sha256": digest,          # SHA-256 of the *uncompressed* SQLite
+        "compression": "zlib",     # iOS decompresses before verifying
         "url": public_url,
         "size_bytes": sqlite_path.stat().st_size,
     }
@@ -382,10 +398,16 @@ def main() -> None:
         log.warning(f"Proceeding without: {', '.join(failed)}")
 
     sqlite_path = out_dir / "gtfs.sqlite"
+    compressed_path = out_dir / "gtfs.sqlite.zz"
     manifest_path = out_dir / "manifest.json"
 
     build_sqlite(provider_zips, sqlite_path)
+    compress_sqlite(sqlite_path, compressed_path)
     write_manifest(sqlite_path, manifest_path, version, args.public_url)
+
+    # Remove the uncompressed copy — only the .zz and manifest are published.
+    sqlite_path.unlink()
+    log.info(f"Removed uncompressed {sqlite_path.name} (only .zz is published)")
 
     log.info("Done.")
 

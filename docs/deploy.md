@@ -26,14 +26,14 @@ branch root.
 1. **Settings → Pages → Source:** "Deploy from a branch", Branch: `gh-pages` / `root`.
    (The first workflow run creates the `gh-pages` branch.)
 2. **Settings → Secrets and variables → Actions → Variables:** add
-   `STATIC_SQLITE_URL` = `https://<user>.github.io/<repo>/gtfs.sqlite`.
+   `STATIC_SQLITE_URL` = `https://<user>.github.io/<repo>/gtfs.sqlite.zz`.
 3. Run the workflow once manually: **Actions → "Build & Publish Static GTFS" → Run workflow**
    (it otherwise runs daily at 03:00 UTC).
 
 **Verify**
 ```sh
 curl -fsSL https://<user>.github.io/<repo>/manifest.json
-curl -fsSI https://<user>.github.io/<repo>/gtfs.sqlite   # expect 200, HTTPS
+curl -fsSI https://<user>.github.io/<repo>/gtfs.sqlite.zz   # expect 200, HTTPS
 ```
 
 **Run the pipeline locally** (optional, to produce/inspect the artifact without CI):
