@@ -309,6 +309,12 @@ def build_sqlite(provider_zips: dict[str, bytes], out_path: Path) -> None:
 
     log.info("Running VACUUM…")
     con.execute("VACUUM")
+    # Ship a rollback-journal (non-WAL) database. WAL mode stamps the header's
+    # read/write-version bytes to 2, and a WAL-mode file cannot be opened
+    # SQLITE_OPEN_READONLY on iOS (it needs to create -wal/-shm sidecars). The
+    # app ships only the main file and opens it read-only, so revert to DELETE
+    # mode here, which resets the header to version 1 and opens cleanly.
+    con.execute("PRAGMA journal_mode=DELETE")
     con.close()
 
     size_mb = out_path.stat().st_size / 1024 / 1024

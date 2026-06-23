@@ -27,9 +27,18 @@
 	<string>Cybus uses your location to show buses near you when you tap "Locate me".</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<!-- All app traffic goes through our HTTPS proxy — no plain HTTP exceptions needed -->
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>20.19.98.194</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<false/>
+			</dict>
+		</dict>
 	</dict>
 </dict>
 </plist>

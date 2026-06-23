@@ -1,22 +1,13 @@
 import Foundation
 
-/// The only values that change when the backend is deployed. Everything else in
-/// the app derives its endpoints from here, so a deploy is a two-line edit.
+/// Central endpoint config. Edit here when the backend changes.
 ///
-/// After deploying, set:
-///  - `proxyBaseURL`  → the Cloudflare Worker (realtime proxy) origin, e.g.
-///                      https://cybus-proxy.<your-subdomain>.workers.dev
-///  - `staticBaseURL` → where the pipeline publishes gtfs.sqlite + manifest.json.
-///                      For GitHub Pages (repo named `cybus`):
-///                      https://<your-github-user>.github.io/cybus
-///
-/// Both must be HTTPS (iOS App Transport Security blocks plain HTTP, and the
-/// static trust model is HTTPS + SHA-256 verification — see docs/security.md).
-/// See docs/deploy.md for the full deployment runbook.
+/// Realtime goes direct to the CyNAP upstream over plain HTTP (ATS exception in Info.plist).
+/// Static GTFS is served from GitHub Pages over HTTPS.
 enum AppConfig {
 
-    /// Realtime proxy origin — no trailing slash, no path.
-    static let proxyBaseURL = URL(string: "https://cybus-proxy.droid4dani.workers.dev")!
+    /// Realtime feed origin — direct to the CyNAP upstream (plain HTTP, ATS exception in Info.plist).
+    static let proxyBaseURL = URL(string: "http://20.19.98.194:8328")!
 
     /// Static artifact base — no trailing slash. The pipeline publishes
     /// `manifest.json` and `gtfs.sqlite.zz` directly under this URL.
@@ -24,8 +15,8 @@ enum AppConfig {
 
     // MARK: - Derived endpoints
 
-    /// GTFS-realtime protobuf snapshot served by the proxy.
-    static var realtimeFeedURL: URL { proxyBaseURL.appendingPathComponent("gtfs-rt") }
+    /// GTFS-realtime protobuf — direct CyNAP endpoint.
+    static var realtimeFeedURL: URL { proxyBaseURL.appendingPathComponent("Api/api/gtfs-realtime") }
 
     /// Version manifest the app checks before downloading the SQLite.
     static var manifestURL: URL { staticBaseURL.appendingPathComponent("manifest.json") }

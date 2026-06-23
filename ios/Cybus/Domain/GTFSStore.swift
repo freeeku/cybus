@@ -60,16 +60,29 @@ final class GTFSStore: GTFSStoreProtocol {
 
     init(url: URL) throws {
         var handle: OpaquePointer?
-        let flags = SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX
-        guard sqlite3_open_v2(url.path, &handle, flags, nil) == SQLITE_OK,
+        // Open with the `immutable=1` URI flag (requires SQLITE_OPEN_URI). This
+        // tells SQLite the file is on read-only media and will not change, so it
+        // skips all locking, WAL, and -shm shared-memory setup. Without this, a
+        // database whose header is flagged WAL-mode (which the build pipeline can
+        // leave behind) fails the *first* prepare under SQLITE_OPEN_READONLY with
+        // "could not prepare" — open is lazy, so the error surfaces later.
+        let flags = SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_URI
+        // Percent-encode the path for the URI form (real paths contain spaces,
+        // e.g. ".../Application Support/..."). Keep "/" so it stays a path.
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "?#")
+        let encodedPath = url.path.addingPercentEncoding(withAllowedCharacters: allowed) ?? url.path
+        let uri = "file:\(encodedPath)?immutable=1"
+        guard sqlite3_open_v2(uri, &handle, flags, nil) == SQLITE_OK,
               let opened = handle else {
             throw GTFSStoreError.cannotOpen(url)
         }
         db = opened
 
-        // Verify integrity (fast; reads page checksum)
+        // Integrity is pre-verified via SHA-256 in StaticDataManager before the
+        // file is written, so a corrupt download never reaches here.
         try verifyIntegrity()
-        // Warm caches for hot-path lookups
+        // Warm caches for hot-path lookups.
         try warmCaches()
     }
 

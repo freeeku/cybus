@@ -258,10 +258,14 @@ enum StaticDataManager {
 
     private static func decompress(_ data: Data, compression: String?) throws -> Data {
         guard compression == "zlib" else { return data }
-        guard let decompressed = (data as NSData).decompressed(using: .zlib) as Data? else {
-            throw StaticDataError.decompressionFailed
-        }
-        return decompressed
+        // NSData.decompressed(using: .zlib) expects raw DEFLATE (RFC 1951).
+        // Python's zlib.compress() emits zlib-wrapped format (RFC 1950) with a
+        // 2-byte header and 4-byte Adler-32 trailer — strip those first.
+        guard data.count > 6 else { throw StaticDataError.decompressionFailed }
+        // Force a copy (not a slice) — NSData bridging can behave unexpectedly with
+        // non-zero-based Data slices on some runtime versions.
+        let rawDeflate = Data(data[2 ..< data.count - 4])
+        return try (rawDeflate as NSData).decompressed(using: .zlib) as Data
     }
 
     private static func fetchManifest(from url: URL) async throws -> Manifest {
@@ -276,8 +280,9 @@ enum StaticDataManager {
     }
 
     private static func localSQLiteURL() -> URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("gtfs.sqlite")
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("gtfs.sqlite")
     }
 
     private static func storedVersion() -> String? {

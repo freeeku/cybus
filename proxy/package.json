@@ -13,5 +13,12 @@
     "typescript": "^5.8.3",
     "vitest": "^3.2.0",
     "wrangler": "^4.13.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "esbuild@0.27.7": true,
+    "fsevents@2.3.3": true,
+    "sharp@0.34.5": true,
+    "workerd@1.20260617.1": true
   }
 }
