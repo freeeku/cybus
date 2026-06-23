@@ -3,10 +3,15 @@ import MapKit
 
 struct CybusMapView: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(LocationProvider.self) private var location
     @State private var position: MapCameraPosition = .automatic
+    @State private var didInitialCenter = false
 
     var body: some View {
         Map(position: $position) {
+
+            // ── User's location (blue dot; visible once authorized) ──────
+            UserAnnotation()
 
             // ── Vehicle markers ──────────────────────────────────────────
             ForEach(appModel.vehicles) { vehicle in
@@ -53,6 +58,10 @@ struct CybusMapView: View {
         }
         .onAppear {
             position = .region(appModel.mapRegion)
+            location.requestAuthorization()
+        }
+        .onChange(of: location.userLocation) { _, loc in
+            centerOnUserIfNeeded(loc?.coordinate)
         }
         .onChange(of: appModel.trackedVehicle) { _, tracked in
             if let tracked {
@@ -63,6 +72,24 @@ struct CybusMapView: View {
                     ))
                 }
             }
+        }
+    }
+
+    /// On first launch (no persisted region), once we have the user's location
+    /// and they're on the island, zoom to them — close enough that nearby Stops
+    /// appear. Runs once; afterwards the user drives the camera (and the system
+    /// "locate me" button still re-centers on demand).
+    private func centerOnUserIfNeeded(_ coordinate: CLLocationCoordinate2D?) {
+        guard !didInitialCenter,
+              appModel.startedAtDefaultRegion,
+              let coordinate,
+              AppModel.isInCyprus(coordinate) else { return }
+        didInitialCenter = true
+        withAnimation(.easeInOut(duration: 0.5)) {
+            position = .region(MKCoordinateRegion(
+                center: coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+            ))
         }
     }
 }

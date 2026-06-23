@@ -46,10 +46,17 @@ final class AppModel {
     private static let manifestURL = AppConfig.manifestURL
     private static let sqliteURL = AppConfig.sqliteURL
 
+    /// True when no persisted region was restored, i.e. this is effectively a
+    /// first launch. The map uses this to decide whether to auto-center on the
+    /// user's location (we don't override a region the user last looked at).
+    let startedAtDefaultRegion: Bool
+
     // MARK: - Init
 
     init() {
-        mapRegion = loadPersistedRegion() ?? Self.defaultRegion
+        let persisted = AppModel.loadPersistedRegion()
+        mapRegion = persisted ?? Self.defaultRegion
+        startedAtDefaultRegion = (persisted == nil)
         Task { await startUp() }
     }
 
@@ -199,7 +206,7 @@ final class AppModel {
 
     // MARK: - Helpers
 
-    private func loadPersistedRegion() -> MKCoordinateRegion? {
+    private static func loadPersistedRegion() -> MKCoordinateRegion? {
         guard let d = UserDefaults.standard.dictionary(forKey: "lastMapRegion") as? [String: Double],
               let lat = d["lat"], let lon = d["lon"],
               let dLat = d["dLat"], let dLon = d["dLon"] else { return nil }
@@ -214,6 +221,13 @@ final class AppModel {
         center: CLLocationCoordinate2D(latitude: 35.126, longitude: 33.430),
         span: MKCoordinateSpan(latitudeDelta: 2.0, longitudeDelta: 2.5)
     )
+
+    /// Rough bounding box for Cyprus. The map auto-centers on the user only when
+    /// they're on the island — a user opening the app abroad keeps the default
+    /// island overview rather than being yanked to wherever they are.
+    static func isInCyprus(_ c: CLLocationCoordinate2D) -> Bool {
+        (34.4...35.8).contains(c.latitude) && (32.0...34.7).contains(c.longitude)
+    }
 }
 
 // MARK: - StaticDataManager
