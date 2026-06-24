@@ -5,10 +5,11 @@ struct CybusMapView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(LocationProvider.self) private var location
     @State private var position: MapCameraPosition = .automatic
-    @State private var didInitialCenter = false
+    @State private var didAutoCenter = false       // first auto-center this launch
+    @State private var pendingRecenter = false     // user tapped locate; center on next fix
 
     var body: some View {
-        Map(position: $position) {
+        Map(position: $position, interactionModes: .all) {
 
             // ── User's location (blue dot; visible once authorized) ──────
             UserAnnotation()
@@ -47,11 +48,14 @@ struct CybusMapView: View {
             }
         }
         .mapStyle(.standard(pointsOfInterest: .excluding([.publicTransport])))
+        // Deliberately NOT MapUserLocationButton: it puts the map into "follow"
+        // mode, which locks the camera to the user and fights panning. We use a
+        // plain button that recenters once, leaving the map free to scroll.
         .mapControls {
-            MapUserLocationButton()
             MapCompass()
             MapScaleView()
         }
+        .overlay(alignment: .topTrailing) { locateButton }
         .onMapCameraChange(frequency: .onEnd) { context in
             appModel.saveRegion(context.region)
             appModel.updateVisibleStops(for: context.region)
@@ -59,9 +63,13 @@ struct CybusMapView: View {
         .onAppear {
             position = .region(appModel.mapRegion)
             location.requestAuthorization()
+            // Seed from any fix that already landed before this observer was
+            // registered: onChange only fires on a *change*, so without this the
+            // first launch never auto-centers when the GPS fix beats the view.
+            handleLocationUpdate(location.userLocation?.coordinate)
         }
         .onChange(of: location.userLocation) { _, loc in
-            centerOnUserIfNeeded(loc?.coordinate)
+            handleLocationUpdate(loc?.coordinate)
         }
         .onChange(of: appModel.trackedVehicle) { _, tracked in
             if let tracked {
@@ -75,22 +83,64 @@ struct CybusMapView: View {
         }
     }
 
-    /// On first launch (no persisted region), once we have the user's location
-    /// and they're on the island, zoom to them — close enough that nearby Stops
-    /// appear. Runs once; afterwards the user drives the camera (and the system
-    /// "locate me" button still re-centers on demand).
-    private func centerOnUserIfNeeded(_ coordinate: CLLocationCoordinate2D?) {
-        guard !didInitialCenter,
-              appModel.startedAtDefaultRegion,
-              let coordinate,
-              AppModel.isInCyprus(coordinate) else { return }
-        didInitialCenter = true
-        withAnimation(.easeInOut(duration: 0.5)) {
-            position = .region(MKCoordinateRegion(
-                center: coordinate,
-                span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-            ))
+    // MARK: - Locate button
+
+    /// One-shot "center on me" button (replaces MapUserLocationButton so the map
+    /// stays free to pan). Tapping it jumps to the last known location right away
+    /// and refreshes for a newer fix.
+    private var locateButton: some View {
+        Button(action: recenterOnUser) {
+            Image(systemName: "location.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.tint)
+                .frame(width: 44, height: 44)
+                .background(.regularMaterial, in: Circle())
+                .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
         }
+        .padding(.top, 56)
+        .padding(.trailing, 12)
+        .accessibilityLabel("Center on my location")
+    }
+
+    // MARK: - Centering
+
+    /// Handles each new location fix: auto-center once per launch when the user
+    /// is on the island, and honor a pending manual "locate me" tap.
+    private func handleLocationUpdate(_ coordinate: CLLocationCoordinate2D?) {
+        guard let coordinate else { return }
+        if !didAutoCenter, AppModel.isInCyprus(coordinate) {
+            didAutoCenter = true
+            centerOn(coordinate)
+        } else if pendingRecenter {
+            pendingRecenter = false
+            centerOn(coordinate)
+        }
+    }
+
+    /// Invoked by the locate button. Prompts for permission if needed, jumps to
+    /// the last known fix immediately, and asks for a fresh one.
+    private func recenterOnUser() {
+        location.requestAuthorization()   // prompts if undecided; refreshes the fix if authorized
+        if let coordinate = location.userLocation?.coordinate {
+            centerOn(coordinate)
+        }
+        pendingRecenter = true            // re-center when the fresh fix lands
+    }
+
+    /// Animates the camera to `coordinate`, zoomed tight enough that nearby Stops
+    /// appear (under stopZoomThreshold) while keeping the pin count small.
+    /// Also refreshes the visible Stops directly: `onMapCameraChange(.onEnd)` does
+    /// not reliably fire for programmatic moves, so we can't rely on it here.
+    private func centerOn(_ coordinate: CLLocationCoordinate2D) {
+        let region = MKCoordinateRegion(
+            center: coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.025, longitudeDelta: 0.025)
+        )
+        withAnimation(.easeInOut(duration: 0.4)) {
+            position = .region(region)
+        }
+        appModel.saveRegion(region)
+        appModel.updateVisibleStops(for: region)
     }
 }
 
@@ -129,12 +179,14 @@ struct StopAnnotationView: View {
     let isSelected: Bool
 
     var body: some View {
+        // No drop shadow: with dozens of stop annotations on screen, per-pin
+        // shadows force offscreen rendering and stutter pan/zoom. A solid stroke
+        // gives enough contrast against the map.
         ZStack {
             Circle()
                 .fill(isSelected ? Color.accentColor : .white)
                 .frame(width: 16, height: 16)
                 .overlay(Circle().stroke(Color.accentColor, lineWidth: 2))
-                .shadow(color: .black.opacity(0.2), radius: 1)
         }
     }
 }

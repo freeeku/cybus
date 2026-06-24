@@ -46,17 +46,12 @@ final class AppModel {
     private static let manifestURL = AppConfig.manifestURL
     private static let sqliteURL = AppConfig.sqliteURL
 
-    /// True when no persisted region was restored, i.e. this is effectively a
-    /// first launch. The map uses this to decide whether to auto-center on the
-    /// user's location (we don't override a region the user last looked at).
-    let startedAtDefaultRegion: Bool
-
     // MARK: - Init
 
     init() {
-        let persisted = AppModel.loadPersistedRegion()
-        mapRegion = persisted ?? Self.defaultRegion
-        startedAtDefaultRegion = (persisted == nil)
+        // Persisted region is the initial view until the first location fix
+        // arrives; the map then auto-centers on the user (every launch).
+        mapRegion = AppModel.loadPersistedRegion() ?? Self.defaultRegion
         Task { await startUp() }
     }
 
@@ -95,13 +90,15 @@ final class AppModel {
     // MARK: - Stops on the map
 
     /// Span (in degrees latitude) below which individual Stops are shown. Above
-    /// this the map would be an unreadable wall of pins (PRD story 7), so we
-    /// show none.
-    private static let stopZoomThreshold: Double = 0.08
+    /// this the map would be an unreadable wall of pins (PRD story 7), so we show
+    /// none. Kept tight because SwiftUI renders each Stop as a live annotation
+    /// view, and a few hundred of those choke the map's pan/zoom gestures.
+    private static let stopZoomThreshold: Double = 0.035
 
-    /// Maximum Stops loaded for a single view, as a backstop against a dense
-    /// bounding box. The zoom gate keeps real-world counts well under this.
-    private static let stopQueryLimit = 400
+    /// Maximum Stops loaded for a single view. A hard ceiling on annotation
+    /// views so a dense city block stays smooth; the zoom gate keeps typical
+    /// counts well under this.
+    private static let stopQueryLimit = 120
 
     /// Recomputes the visible Stops for the given map region. Clears them when
     /// zoomed out past the threshold or before the static store has loaded.
