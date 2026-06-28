@@ -35,9 +35,14 @@ enum ArrivalBuilder {
             )
             guard coord.isValid else { continue }
 
-            // Resolve route (from VehiclePosition.routeId or via trip join)
-            let routeId = vp.routeId
-                ?? vp.tripId.flatMap { store.routeId(forTrip: $0) }
+            // Resolve route to the *full static* route_id. Prefer the trip join:
+            // the RT feed strips the "AGENCY:" prefix from its route_id, so a
+            // trip lookup (unique id) yields the canonical static route_id that
+            // shape/color/name lookups need. Fall back to mapping the bare RT
+            // route_id onto a static route, then to the raw value.
+            let routeId = vp.tripId.flatMap { store.routeId(forTrip: $0) }
+                ?? vp.routeId.flatMap { store.route(id: $0)?.id }
+                ?? vp.routeId
                 ?? ""
             let route = store.route(id: routeId)
 

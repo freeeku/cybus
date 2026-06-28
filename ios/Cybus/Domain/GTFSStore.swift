@@ -37,6 +37,21 @@ final class GTFSStore: GTFSStoreProtocol {
     private var tripRouteCache: [String: String] = [:]      // tripId → routeId
     private var tripHeadsignCache: [String: String] = [:]   // tripId → headsign
 
+    // The realtime feed reports IDs *without* the "AGENCY:" prefix the static
+    // GTFS uses (RT "50050011" ↔ static "Intercity:50050011"). These suffix
+    // indexes let lookups fall back to a prefix-stripped match. Suffixes are
+    // unique across the dataset, so the fallback is unambiguous.
+    private var routeBySuffix: [String: RouteInfo] = [:]     // bareId → RouteInfo
+    private var tripRouteBySuffix: [String: String] = [:]    // bareTripId → routeId
+    private var tripHeadsignBySuffix: [String: String] = [:] // bareTripId → headsign
+
+    /// The portion of a GTFS id after the "AGENCY:" prefix, or the whole id if
+    /// there is no prefix.
+    private static func bareId(_ id: String) -> String {
+        guard let colon = id.firstIndex(of: ":") else { return id }
+        return String(id[id.index(after: colon)...])
+    }
+
     // Service-calendar caches (for filtering scheduled trips by day-of-service)
     private var serviceRules: [String: ServiceRule] = [:]
     private var serviceExceptions: [String: [Int: Int]] = [:]  // serviceId → (yyyymmdd → exception_type)
@@ -93,15 +108,15 @@ final class GTFSStore: GTFSStoreProtocol {
     // MARK: - GTFSStoreProtocol
 
     func route(id: String) -> RouteInfo? {
-        routeCache[id]
+        routeCache[id] ?? routeBySuffix[Self.bareId(id)]
     }
 
     func routeId(forTrip tripId: String) -> String? {
-        tripRouteCache[tripId]
+        tripRouteCache[tripId] ?? tripRouteBySuffix[Self.bareId(tripId)]
     }
 
     func headsign(forTrip tripId: String) -> String? {
-        tripHeadsignCache[tripId]
+        tripHeadsignCache[tripId] ?? tripHeadsignBySuffix[Self.bareId(tripId)]
     }
 
     func shape(forRoute routeId: String) -> [CLLocationCoordinate2D] {
@@ -288,12 +303,14 @@ final class GTFSStore: GTFSStoreProtocol {
                 let id = String(cString: idC)
                 let name = String(cString: nameC)
                 let hexColor = sqlite3_column_text(stmt, 2).map { String(cString: $0) }
-                routeCache[id] = RouteInfo(
+                let info = RouteInfo(
                     id: id,
                     shortName: name,
                     color: hexColor.flatMap(colorFromHex),
                     shape: []    // shapes are lazy-loaded when a route is selected
                 )
+                routeCache[id] = info
+                routeBySuffix[Self.bareId(id)] = info
             }
         }
 
@@ -307,9 +324,13 @@ final class GTFSStore: GTFSStoreProtocol {
                       let ridC = sqlite3_column_text(tripStmt, 1) else { continue }
                 let tid = String(cString: tidC)
                 let rid = String(cString: ridC)
+                let bareTid = Self.bareId(tid)
                 tripRouteCache[tid] = rid
+                tripRouteBySuffix[bareTid] = rid
                 if let hsC = sqlite3_column_text(tripStmt, 2) {
-                    tripHeadsignCache[tid] = String(cString: hsC)
+                    let hs = String(cString: hsC)
+                    tripHeadsignCache[tid] = hs
+                    tripHeadsignBySuffix[bareTid] = hs
                 }
             }
         }

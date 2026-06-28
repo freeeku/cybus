@@ -19,8 +19,9 @@ final class AppModel {
     var vehicles: [Vehicle] = []
     var stops: [Stop] = []              // Stops visible at the current zoom (empty when zoomed out)
     var selectedStop: Stop?
+    var selectedVehicle: Vehicle?       // bus tapped on the map; drives the detail sheet
     var arrivals: [Arrival] = []
-    var trackedVehicle: Vehicle?        // highlighted + followed when user taps an Arrival
+    var trackedVehicle: Vehicle?        // highlighted + followed when user taps an Arrival or a bus
 
     /// Current map region; persisted to UserDefaults as last-viewed region.
     var mapRegion: MKCoordinateRegion = AppModel.defaultRegion
@@ -71,6 +72,7 @@ final class AppModel {
     // MARK: - Stop selection
 
     func selectStop(_ stop: Stop) {
+        selectedVehicle = nil
         selectedStop = stop
         trackedVehicle = nil
         rebuildArrivals(for: stop)
@@ -80,6 +82,28 @@ final class AppModel {
         selectedStop = nil
         arrivals = []
         trackedVehicle = nil
+    }
+
+    // MARK: - Vehicle selection
+
+    /// Called when the user taps a bus on the map. Opens its detail sheet and
+    /// tracks it (highlight + camera follow, reusing the trackedVehicle path).
+    func selectVehicle(_ vehicle: Vehicle) {
+        selectedStop = nil
+        arrivals = []
+        selectedVehicle = vehicle
+        trackedVehicle = vehicle
+    }
+
+    func dismissVehicle() {
+        selectedVehicle = nil
+        trackedVehicle = nil
+    }
+
+    /// Destination headsign for a trip, for the vehicle detail sheet. Nil until
+    /// the static store has loaded or when the trip has no headsign.
+    func headsign(forTrip tripId: String) -> String? {
+        store?.headsign(forTrip: tripId)
     }
 
     /// Called when user taps an Arrival row to track/highlight its Vehicle.
@@ -180,6 +204,12 @@ final class AppModel {
         // updates. Drops tracking if the vehicle has left the feed.
         if let tracked = trackedVehicle {
             trackedVehicle = vehicles.first { $0.id == tracked.id }
+        }
+
+        // Keep the open detail sheet's vehicle (position/updatedAt) current too;
+        // closes the sheet if that bus is no longer reporting.
+        if let selected = selectedVehicle {
+            selectedVehicle = vehicles.first { $0.id == selected.id }
         }
 
         if let stop = selectedStop {

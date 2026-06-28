@@ -21,6 +21,7 @@ struct CybusMapView: View {
                         vehicle: vehicle,
                         isTracked: appModel.trackedVehicle?.id == vehicle.id
                     )
+                    .onTapGesture { appModel.selectVehicle(vehicle) }
                 }
                 .annotationTitles(.hidden)
             }
@@ -40,11 +41,16 @@ struct CybusMapView: View {
             }
 
             // ── Route polyline (only when a stop/vehicle is selected) ────
+            // Drawn as a white casing under a thicker route-colored line so the
+            // selected bus's route stands out against the map's own roads.
             if let vehicle = appModel.trackedVehicle,
                let shape = appModel.routeShape(forRoute: vehicle.routeId),
                !shape.isEmpty {
                 MapPolyline(coordinates: shape)
-                    .stroke(vehicle.routeColor ?? .blue, lineWidth: 3)
+                    .stroke(.white, style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round))
+                MapPolyline(coordinates: shape)
+                    .stroke(vehicle.routeColor ?? .blue,
+                            style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
             }
         }
         .mapStyle(.standard(pointsOfInterest: .excluding([.publicTransport])))

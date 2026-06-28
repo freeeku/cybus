@@ -12,6 +12,13 @@ struct RootView: View {
             set: { if $0 == nil { appModel.dismissStop() } }
         )
 
+        // Same bridge for the tapped bus: any dismissal routes through
+        // dismissVehicle() so the highlight/tracking clears too.
+        let vehicleBinding = Binding<Vehicle?>(
+            get: { appModel.selectedVehicle },
+            set: { if $0 == nil { appModel.dismissVehicle() } }
+        )
+
         ZStack(alignment: .bottom) {
             CybusMapView()
 
@@ -34,6 +41,12 @@ struct RootView: View {
         .sheet(item: stopBinding) { stop in
             StopSheetView(stop: stop)
                 .presentationDetents([.medium, .large])
+                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: vehicleBinding) { vehicle in
+            VehicleSheetView(vehicle: vehicle)
+                .presentationDetents([.height(280), .medium])
                 .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                 .presentationDragIndicator(.visible)
         }
