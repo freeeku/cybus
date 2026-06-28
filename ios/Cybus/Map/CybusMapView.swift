@@ -150,23 +150,34 @@ struct VehicleAnnotationView: View {
     let vehicle: Vehicle
     let isTracked: Bool
 
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(vehicle.routeColor ?? .blue)
-                .frame(width: isTracked ? 32 : 24, height: isTracked ? 32 : 24)
-                .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+    private var size: CGFloat { isTracked ? 34 : 28 }
 
+    var body: some View {
+        // Deliberately a rounded SQUARE with a white border and a bus glyph, so a
+        // vehicle reads instantly differently from the small hollow round Stop pin.
+        // A small heading arrow rides outside the badge to show travel direction
+        // without competing with the bus icon.
+        ZStack {
             if let bearing = vehicle.bearing {
                 Image(systemName: "arrowtriangle.up.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(vehicle.routeColor ?? .blue)
+                    .offset(y: -(size / 2) - 3)
                     .rotationEffect(.degrees(Double(bearing)))
-            } else {
-                Image(systemName: "bus.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white)
             }
+
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(vehicle.routeColor ?? .blue)
+                .frame(width: size, height: size)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(.white, lineWidth: 2)
+                )
+                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+
+            Image(systemName: "bus.fill")
+                .font(.system(size: isTracked ? 16 : 13, weight: .semibold))
+                .foregroundStyle(.white)
         }
         .animation(.spring(response: 0.3), value: isTracked)
     }
