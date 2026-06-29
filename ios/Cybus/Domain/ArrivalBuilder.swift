@@ -82,6 +82,15 @@ enum ArrivalBuilder {
         var arrivals: [Arrival] = []
         let cutoffPast = now.addingTimeInterval(-60)    // 60-s grace for departing buses
 
+        // The RT feed strips the "AGENCY:" prefix the static GTFS uses on
+        // stop_ids (RT "55" ↔ static "EMEL:55"). The tapped stop is a known
+        // *full* static id, so compare RT entries against its bare form. Stop
+        // numbers are NOT unique across agencies, so also require the trip's
+        // route agency to match the stop's, ruling out a same-number stop from
+        // a different operator.
+        let bareStop = Self.bareId(stopId)
+        let stopAgency = Self.agency(stopId)
+
         // ── 1. Live arrivals ──────────────────────────────────────────────────
 
         // Build fast lookup: tripId → vehicleId (from VehiclePosition entities)
@@ -92,23 +101,32 @@ enum ArrivalBuilder {
             }
         )
 
-        var liveTrips = Set<String>()
+        var liveTrips = Set<String>()     // bare trip ids, for scheduled-dedup
 
         for entity in feed.entities {
             guard let tu = entity.tripUpdate else { continue }
 
-            // Find the StopTimeUpdate for this stop (match by stop_id)
-            guard let stu = tu.stopTimeUpdates.first(where: { $0.stopId == stopId }),
+            // Find the StopTimeUpdate for this stop (RT ids may be bare or full).
+            guard let stu = tu.stopTimeUpdates.first(where: { $0.stopId == stopId || $0.stopId == bareStop }),
                   let event = stu.arrival ?? stu.departure,
                   let arrivalDate = event.time,
                   arrivalDate > cutoffPast
             else { continue }
 
+            // Resolve to the full static route_id (trip id is unique; prefer it).
+            let routeId = store.routeId(forTrip: tu.tripId)
+                ?? tu.routeId.flatMap { store.route(id: $0)?.id }
+                ?? tu.routeId
+                ?? ""
+
+            // Reject a same-numbered stop belonging to a different operator.
+            if let stopAgency, let routeAgency = Self.agency(routeId),
+               routeAgency != stopAgency { continue }
+
             // Dedup by tripId — the combined CyNAP feed can repeat entities,
             // which would otherwise produce duplicate live rows for one bus.
-            guard liveTrips.insert(tu.tripId).inserted else { continue }
+            guard liveTrips.insert(Self.bareId(tu.tripId)).inserted else { continue }
 
-            let routeId = tu.routeId ?? store.routeId(forTrip: tu.tripId) ?? ""
             let route = store.route(id: routeId)
             let countdown = arrivalDate.timeIntervalSince(now)
 
@@ -125,7 +143,7 @@ enum ArrivalBuilder {
         // ── 2 & 3. Scheduled fallback ─────────────────────────────────────────
 
         let scheduled = store.upcomingTrips(stopId: stopId, after: now)
-        for trip in scheduled where !liveTrips.contains(trip.tripId) {
+        for trip in scheduled where !liveTrips.contains(Self.bareId(trip.tripId)) {
             guard trip.arrivalTime > cutoffPast else { continue }
             let route = store.route(id: trip.routeId)
             arrivals.append(Arrival(
@@ -154,6 +172,21 @@ enum ArrivalBuilder {
         guard arrival.isLive else { return nil }
         // Primary: match by tripId
         return vehicles.first { $0.tripId == arrival.tripId }
+    }
+
+    // MARK: - GTFS id prefix helpers
+
+    /// The id with any "AGENCY:" prefix removed (RT ids are reported bare while
+    /// the static GTFS prefixes them). Returns the id unchanged if unprefixed.
+    static func bareId(_ id: String) -> String {
+        guard let colon = id.firstIndex(of: ":") else { return id }
+        return String(id[id.index(after: colon)...])
+    }
+
+    /// The "AGENCY" portion before the first colon, or nil if there is none.
+    static func agency(_ id: String) -> String? {
+        guard let colon = id.firstIndex(of: ":") else { return nil }
+        return String(id[..<colon])
     }
 }
 

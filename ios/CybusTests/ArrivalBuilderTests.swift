@@ -222,6 +222,67 @@ final class BuildArrivalsTests: XCTestCase {
         XCTAssertTrue(arrivals[0].isLive)
     }
 
+    // The RT feed strips the "AGENCY:" prefix from stop_ids; the tapped stop is
+    // a full static id. Live arrivals must still match.
+    func testLiveArrivalMatchesWhenFeedStopIdIsPrefixStripped() {
+        let store = MockGTFSStore()
+        store.routes["EMEL:R1"] = makeRoute("EMEL:R1", shortName: "30")
+        store.tripRoutes["T1"] = "EMEL:R1"
+
+        // Feed reports the bare stop id "55"; user tapped "EMEL:55".
+        let tu = makeTripUpdate(tripId: "T1", stopId: "55", arrivalOffset: 300)
+        let feed = makeFeed(tripUpdates: [tu])
+
+        let arrivals = ArrivalBuilder.buildArrivals(
+            store: store, feed: feed, stopId: "EMEL:55", now: refDate
+        )
+
+        XCTAssertEqual(arrivals.count, 1)
+        XCTAssertTrue(arrivals[0].isLive)
+        XCTAssertEqual(arrivals[0].routeShortName, "30")
+    }
+
+    // Bare stop numbers are reused across operators. A trip from a different
+    // agency that references the same bare number must not surface at this stop.
+    func testLiveArrivalRejectedWhenTripAgencyDiffersFromStop() {
+        let store = MockGTFSStore()
+        store.routes["Intercity:R9"] = makeRoute("Intercity:R9", shortName: "36")
+        store.tripRoutes["T9"] = "Intercity:R9"
+
+        // Intercity bus references bare stop "55"; user tapped EMEL's stop 55.
+        let tu = makeTripUpdate(tripId: "T9", stopId: "55", arrivalOffset: 120)
+        let feed = makeFeed(tripUpdates: [tu])
+
+        let arrivals = ArrivalBuilder.buildArrivals(
+            store: store, feed: feed, stopId: "EMEL:55", now: refDate
+        )
+
+        XCTAssertTrue(arrivals.isEmpty, "A different operator's stop 55 must not appear at EMEL:55")
+    }
+
+    // The scheduled store yields prefixed trip ids; the live feed yields bare
+    // ones. Dedup must compare on the bare id so a live trip isn't also shown
+    // as scheduled.
+    func testScheduledNotDuplicatedAcrossPrefixForLiveTrip() {
+        let store = MockGTFSStore()
+        store.routes["EMEL:R1"] = makeRoute("EMEL:R1", shortName: "30")
+        store.tripRoutes["T1"] = "EMEL:R1"
+
+        let tu = makeTripUpdate(tripId: "T1", stopId: "55", arrivalOffset: 300)
+        store.upcomingTripsByStop["EMEL:55"] = [
+            ScheduledTrip(tripId: "EMEL:T1", routeId: "EMEL:R1",
+                          arrivalTime: refDate.addingTimeInterval(360))
+        ]
+
+        let feed = makeFeed(tripUpdates: [tu])
+        let arrivals = ArrivalBuilder.buildArrivals(
+            store: store, feed: feed, stopId: "EMEL:55", now: refDate
+        )
+
+        XCTAssertEqual(arrivals.count, 1, "Live trip must not be duplicated by its scheduled twin")
+        XCTAssertTrue(arrivals[0].isLive)
+    }
+
     func testAlreadyDepartedArrivalDropped() {
         let store = MockGTFSStore()
         store.tripRoutes["T1"] = "R1"
