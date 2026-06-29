@@ -14,19 +14,38 @@ enum ArrivalBuilder {
 
     // MARK: - buildVehicles
 
+    /// How old a vehicle's last report may be before it's dropped from the map.
+    /// The CyNAP feed never removes a bus that has gone off-shift — it just stops
+    /// updating its timestamp — so without this cutoff stale markers linger
+    /// indefinitely (and jump when the bus eventually re-reports far away).
+    static let vehicleMaxAge: TimeInterval = 5 * 60
+
     /// Derives [Vehicle] from the VehiclePosition entities in `feed`,
     /// joining to `store` to resolve route metadata.
     ///
-    /// Drops any vehicle whose coordinates fail a range check.
-    static func buildVehicles(store: any GTFSStoreProtocol, feed: FeedMessage) -> [Vehicle] {
+    /// Drops any vehicle whose coordinates fail a range check, or whose last
+    /// report is older than `maxAge` relative to `now` (stale buses).
+    static func buildVehicles(
+        store: any GTFSStoreProtocol,
+        feed: FeedMessage,
+        now: Date = Date(),
+        maxAge: TimeInterval = vehicleMaxAge
+    ) -> [Vehicle] {
         var seen = Set<String>()        // dedup by vehicleId
         var vehicles: [Vehicle] = []
+        let staleCutoff = now.addingTimeInterval(-maxAge)
 
         for entity in feed.entities {
             guard let vp = entity.vehiclePosition else { continue }
 
             // Deduplicate (the combined CyNAP feed can repeat entities)
             guard seen.insert(vp.vehicleId).inserted else { continue }
+
+            // Drop buses whose last fix is too old to be trustworthy. A missing
+            // vehicle timestamp falls back to the feed's own timestamp, so an
+            // actively-published feed keeps untimestamped vehicles visible.
+            let reportedAt = vp.timestamp ?? feed.timestamp
+            guard reportedAt >= staleCutoff else { continue }
 
             // Coordinate safety check
             let coord = CLLocationCoordinate2D(
@@ -54,7 +73,7 @@ enum ArrivalBuilder {
                 routeColor: route?.color,
                 coordinate: coord,
                 bearing: vp.bearing,
-                updatedAt: vp.timestamp ?? feed.timestamp
+                updatedAt: reportedAt
             ))
         }
 

@@ -68,7 +68,8 @@ private func makeVehiclePosition(
     vehicleId: String,
     tripId: String,
     lat: Float = 34.9,
-    lon: Float = 33.0
+    lon: Float = 33.0,
+    timestamp: Date? = refDate
 ) -> VehiclePosition {
     VehiclePosition(
         vehicleId: vehicleId,
@@ -77,7 +78,7 @@ private func makeVehiclePosition(
         latitude: lat,
         longitude: lon,
         bearing: nil,
-        timestamp: refDate
+        timestamp: timestamp
     )
 }
 
@@ -93,7 +94,7 @@ final class BuildVehiclesTests: XCTestCase {
         let vp = makeVehiclePosition(vehicleId: "V1", tripId: "T1")
         let feed = makeFeed(vehiclePositions: [vp])
 
-        let vehicles = ArrivalBuilder.buildVehicles(store: store, feed: feed)
+        let vehicles = ArrivalBuilder.buildVehicles(store: store, feed: feed, now: refDate)
 
         XCTAssertEqual(vehicles.count, 1)
         XCTAssertEqual(vehicles[0].id, "V1")
@@ -107,7 +108,7 @@ final class BuildVehiclesTests: XCTestCase {
         let vp2 = makeVehiclePosition(vehicleId: "V1", tripId: "T1")   // duplicate
         let feed = makeFeed(vehiclePositions: [vp1, vp2])
 
-        let vehicles = ArrivalBuilder.buildVehicles(store: store, feed: feed)
+        let vehicles = ArrivalBuilder.buildVehicles(store: store, feed: feed, now: refDate)
         XCTAssertEqual(vehicles.count, 1)
     }
 
@@ -118,14 +119,45 @@ final class BuildVehiclesTests: XCTestCase {
         let bad2 = makeVehiclePosition(vehicleId: "V2", tripId: "T2", lat: 999, lon: 33)
         let feed = makeFeed(vehiclePositions: [bad1, bad2])
 
-        let vehicles = ArrivalBuilder.buildVehicles(store: store, feed: feed)
+        let vehicles = ArrivalBuilder.buildVehicles(store: store, feed: feed, now: refDate)
         XCTAssertEqual(vehicles.count, 0)
     }
 
     func testEmptyFeedProducesNoVehicles() {
         let store = MockGTFSStore()
-        let vehicles = ArrivalBuilder.buildVehicles(store: store, feed: makeFeed())
+        let vehicles = ArrivalBuilder.buildVehicles(store: store, feed: makeFeed(), now: refDate)
         XCTAssertTrue(vehicles.isEmpty, "Night-time empty feed should yield no vehicles")
+    }
+
+    // A bus whose last fix predates the staleness cutoff must be dropped — the
+    // CyNAP feed leaves off-shift buses in the feed with a frozen timestamp.
+    func testStaleVehicleDropped() {
+        let store = MockGTFSStore()
+        store.tripRoutes["T1"] = "R1"
+
+        // V1 reported now; V2 reported just past the max age — only V1 survives.
+        let fresh = makeVehiclePosition(vehicleId: "V1", tripId: "T1")
+        let stale = makeVehiclePosition(
+            vehicleId: "V2", tripId: "T2", lat: 34.91, lon: 33.01,
+            timestamp: refDate.addingTimeInterval(-(ArrivalBuilder.vehicleMaxAge + 1))
+        )
+
+        let feed = makeFeed(vehiclePositions: [fresh, stale])
+        let vehicles = ArrivalBuilder.buildVehicles(store: store, feed: feed, now: refDate)
+
+        XCTAssertEqual(vehicles.map(\.id), ["V1"])
+    }
+
+    // A vehicle without its own timestamp inherits the feed timestamp, so an
+    // actively-published feed keeps it visible (the feed itself proves freshness).
+    func testUntimestampedVehicleKeptWhenFeedIsFresh() {
+        let store = MockGTFSStore()
+        let vp = makeVehiclePosition(vehicleId: "V1", tripId: "T1", timestamp: nil)
+
+        let feed = makeFeed(vehiclePositions: [vp], timestamp: refDate)
+        let vehicles = ArrivalBuilder.buildVehicles(store: store, feed: feed, now: refDate)
+
+        XCTAssertEqual(vehicles.count, 1)
     }
 }
 

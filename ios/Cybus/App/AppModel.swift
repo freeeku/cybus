@@ -185,10 +185,23 @@ final class AppModel {
         pollTask = Task {
             while !Task.isCancelled {
                 await fetchAndApplyFeed()
-                try? await Task.sleep(for: .seconds(60))
+                try? await Task.sleep(for: .seconds(Self.pollInterval))
             }
         }
     }
+
+    /// Realtime poll cadence. GTFS-RT is a snapshot feed, not a stream, so this
+    /// is bounded below by how often CyNAP republishes (~15–30s); polling faster
+    /// just re-fetches identical positions while adding load to the (insecure,
+    /// single-IP) endpoint. 30s is a fresh-enough snapshot; the marker glide
+    /// (see `fetchAndApplyFeed`) hides the gap between snapshots.
+    private static let pollInterval: TimeInterval = 30
+
+    /// Duration of the marker glide between snapshots. Tweens each bus from its
+    /// previous coordinate to the new one so motion reads as continuous instead
+    /// of teleporting. Purely cosmetic interpolation along a straight line — a
+    /// bus rounding a bend cuts the corner — but it costs no extra data.
+    private static let vehicleGlideDuration: TimeInterval = 1.0
 
     @MainActor
     private func fetchAndApplyFeed() async {
@@ -198,18 +211,26 @@ final class AppModel {
         latestFeed = feed
 
         guard let store else { return }
-        vehicles = ArrivalBuilder.buildVehicles(store: store, feed: feed)
+        let fresh = ArrivalBuilder.buildVehicles(store: store, feed: feed, now: Date())
 
-        // Keep the tracked vehicle's position/highlight current as the feed
-        // updates. Drops tracking if the vehicle has left the feed.
-        if let tracked = trackedVehicle {
-            trackedVehicle = vehicles.first { $0.id == tracked.id }
-        }
+        // Apply the position update inside an animation so existing markers glide
+        // to their new coordinate rather than snapping. SwiftUI diffs the
+        // annotations by vehicle id, so persisting buses animate; new buses just
+        // appear and departed/stale ones are removed.
+        withAnimation(.easeInOut(duration: Self.vehicleGlideDuration)) {
+            vehicles = fresh
 
-        // Keep the open detail sheet's vehicle (position/updatedAt) current too;
-        // closes the sheet if that bus is no longer reporting.
-        if let selected = selectedVehicle {
-            selectedVehicle = vehicles.first { $0.id == selected.id }
+            // Keep the tracked vehicle's position/highlight current as the feed
+            // updates. Drops tracking if the vehicle has left the feed.
+            if let tracked = trackedVehicle {
+                trackedVehicle = vehicles.first { $0.id == tracked.id }
+            }
+
+            // Keep the open detail sheet's vehicle (position/updatedAt) current
+            // too; closes the sheet if that bus is no longer reporting.
+            if let selected = selectedVehicle {
+                selectedVehicle = vehicles.first { $0.id == selected.id }
+            }
         }
 
         if let stop = selectedStop {
