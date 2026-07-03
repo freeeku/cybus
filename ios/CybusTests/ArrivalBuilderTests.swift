@@ -329,6 +329,31 @@ final class BuildArrivalsTests: XCTestCase {
         XCTAssertTrue(arrivals.isEmpty)
     }
 
+    // The combined CyNAP feed can repeat entities. Duplicate VehiclePositions
+    // for the same trip must not crash the tripId → vehicleId lookup build
+    // (regression: Dictionary(uniqueKeysWithValues:) trapped on the duplicate).
+    func testDuplicateVehiclePositionsForSameTripDoNotCrash() {
+        let store = MockGTFSStore()
+        store.routes["R1"] = makeRoute("R1", shortName: "30")
+        store.tripRoutes["T1"] = "R1"
+
+        let tu = makeTripUpdate(tripId: "T1", stopId: "S1", arrivalOffset: 300)
+        let vp1 = makeVehiclePosition(vehicleId: "V1", tripId: "T1")
+        let vp2 = makeVehiclePosition(vehicleId: "V1", tripId: "T1")   // repeated entity
+        let feed = makeFeed(tripUpdates: [tu], vehiclePositions: [vp1, vp2])
+
+        let arrivals = ArrivalBuilder.buildArrivals(
+            store: store, feed: feed, stopId: "S1", now: refDate
+        )
+
+        XCTAssertEqual(arrivals.count, 1)
+        if case .live(_, let vehicleId) = arrivals[0].kind {
+            XCTAssertEqual(vehicleId, "V1")
+        } else {
+            XCTFail("Expected live arrival")
+        }
+    }
+
     func testEmptyFeedAndNoScheduledProducesNoBoardRows() {
         let store = MockGTFSStore()
         let arrivals = ArrivalBuilder.buildArrivals(

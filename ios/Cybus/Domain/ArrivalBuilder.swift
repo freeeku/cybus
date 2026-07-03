@@ -112,12 +112,15 @@ enum ArrivalBuilder {
 
         // ── 1. Live arrivals ──────────────────────────────────────────────────
 
-        // Build fast lookup: tripId → vehicleId (from VehiclePosition entities)
+        // Build fast lookup: tripId → vehicleId (from VehiclePosition entities).
+        // First-wins on duplicates: the combined CyNAP feed can repeat entities,
+        // and the crashing uniqueKeysWithValues initializer would trap on them.
         let vehicleByTrip: [String: String] = Dictionary(
-            uniqueKeysWithValues: feed.entities.compactMap { e -> (String, String)? in
+            feed.entities.compactMap { e -> (String, String)? in
                 guard let vp = e.vehiclePosition, let tid = vp.tripId else { return nil }
                 return (tid, vp.vehicleId)
-            }
+            },
+            uniquingKeysWith: { first, _ in first }
         )
 
         var liveTrips = Set<String>()     // bare trip ids, for scheduled-dedup
