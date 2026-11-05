@@ -1,7 +1,7 @@
 {
-  "version": "20261104",
-  "sha256": "c0643761dcbe15def8caa1c31ac2250a1bac082a801012f2627596346e07cd80",
+  "version": "20261105",
+  "sha256": "f73223e43ff707ea309ce4853a1085406ec2e15c7fba45eb4a7f874f972bcedc",
   "compression": "zlib",
   "url": "https://freeeku.github.io/cybus/gtfs.sqlite.zz",
-  "size_bytes": 109649920
+  "size_bytes": 107900928
 }
